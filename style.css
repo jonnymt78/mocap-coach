@@ -1,0 +1,27 @@
+:root { --bg: #111317; --fg: #f2f2f2; --muted: #9aa0a8; --good: #3fbf6f; --bad: #e0574a; --accent: #e8b84a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 17px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+.hidden { display: none !important; }
+.screen { padding: 16px; max-width: 900px; margin: 0 auto; }
+h1 { margin: 8px 0 4px; font-size: 26px; }
+.lede { color: var(--muted); margin: 0 0 12px; }
+.small { color: var(--muted); font-size: 14px; }
+label { display: block; margin: 10px 0; }
+label.row { display: flex; gap: 8px; align-items: center; }
+select { display: block; width: 100%; margin-top: 4px; padding: 10px; font-size: 16px; background: #1d2027; color: var(--fg); border: 1px solid #333; border-radius: 8px; }
+button { font-size: 16px; padding: 10px 14px; border-radius: 10px; border: 0; background: #2a2e37; color: var(--fg); }
+button.big { display: block; width: 100%; margin: 12px 0; padding: 16px; font-size: 20px; background: var(--accent); color: #111; font-weight: 600; }
+button:disabled { opacity: .4; }
+.preview-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+.preview-wrap video, .preview-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.badge { position: absolute; left: 8px; bottom: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(0,0,0,.7); font-size: 15px; }
+#run { position: fixed; inset: 0; max-width: none; padding: 0; background: #000; }
+#run video, #run canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+#banner { position: absolute; top: 0; left: 0; right: 0; padding: 10px 16px; background: rgba(0,0,0,.65); text-align: center; }
+#takeLabel { font-size: 30px; font-weight: 700; color: var(--accent); }
+#takeSay { font-size: 18px; }
+#status { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 64px; font-weight: 800; text-shadow: 0 2px 12px #000; text-align: center; pointer-events: none; }
+#status.good { color: var(--good); } #status.bad { color: var(--bad); font-size: 36px; }
+#controls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; align-items: center; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: rgba(0,0,0,.55); }
+#progress { flex: 1; color: var(--muted); font-size: 15px; }
+code { background: #1d2027; padding: 1px 5px; border-radius: 4px; }

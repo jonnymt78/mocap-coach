@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Mocap Coach</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="setup" class="screen">
+  <h1>Mocap Coach</h1>
+  <p class="lede">Prop the phone up in landscape, back camera facing you, about hip height and 3–4 m away. Everything stays on this phone: nothing is uploaded.</p>
+
+  <div class="preview-wrap"><video id="preview" playsinline muted></video><canvas id="previewOverlay"></canvas><div id="frameCheck" class="badge">Starting camera…</div></div>
+
+  <label>Session
+    <select id="sessionPick"></select>
+  </label>
+  <label>Side-on takes
+    <select id="sidePick">
+      <option value="all">Every move (front and side)</option>
+      <option value="key">Only the moves that need depth (walks, runs, attacks, falls)</option>
+      <option value="none">None (front only)</option>
+    </select>
+  </label>
+  <label>Start at
+    <select id="startPick"></select>
+  </label>
+  <label class="row"><input type="checkbox" id="checksOn" checked> Check each take and ask for a redo when it fails</label>
+
+  <p id="loadStatus" class="small">Loading the body tracker…</p>
+  <button id="startBtn" class="big" disabled>Start</button>
+  <p class="small">After you press Start you never need to touch the phone. Step out of the frame to pause; step back in to carry on.</p>
+</main>
+
+<main id="run" class="screen hidden">
+  <video id="live" playsinline muted></video>
+  <canvas id="liveOverlay"></canvas>
+  <div id="banner"><div id="takeLabel"></div><div id="takeSay"></div></div>
+  <div id="status"></div>
+  <div id="controls">
+    <span id="progress"></span>
+    <button id="backBtn">Back</button>
+    <button id="pauseBtn">Pause</button>
+    <button id="skipBtn">Skip</button>
+    <button id="finishBtn">Finish</button>
+  </div>
+</main>
+
+<main id="done" class="screen hidden">
+  <h1>Session finished</h1>
+  <p id="summary"></p>
+  <button id="saveVideoBtn" class="big">Save video</button>
+  <button id="saveListBtn" class="big">Save take list</button>
+  <p class="small">Save both, then copy them to <code>Reference\Owner\Mocap</code> on the PC (cable or iCloud) and tell Claude. Keep this page open until both are saved.</p>
+  <button id="againBtn">Start another session</button>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
