@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "2.0";
+const VERSION = "2.1";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -157,14 +157,36 @@ function speak(text) {
 let db = null;
 function openDb() {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open("mocap-coach", 1);
-    r.onupgradeneeded = () => { r.result.createObjectStore("chunks", { autoIncrement: true }); r.result.createObjectStore("takes", { autoIncrement: true }); };
-    r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+    const r = indexedDB.open("mocap-coach", 2);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      if (!d.objectStoreNames.contains("chunks")) d.createObjectStore("chunks", { autoIncrement: true });
+      if (!d.objectStoreNames.contains("takes")) d.createObjectStore("takes", { autoIncrement: true });
+      if (!d.objectStoreNames.contains("meta")) d.createObjectStore("meta", { keyPath: "sessionId" }); // per session: settings, log
+    };
+    // Another open copy of this page (an older version in another tab) holds the database: tell it to let go.
+    r.onblocked = () => { const s = document.getElementById("loadStatus"); if (s) s.textContent = "Close any other tabs with the coach open, then reload."; };
+    r.onsuccess = () => { const d = r.result; d.onversionchange = () => d.close(); resolve(d); }; r.onerror = () => reject(r.error);
   });
 }
 function idbPut(store, value) { return new Promise((res, rej) => { const tx = db.transaction(store, "readwrite"); tx.objectStore(store).add(value); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 function idbAll(store) { return new Promise((res, rej) => { const q = db.transaction(store).objectStore(store).getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
-function idbClear() { return new Promise((res) => { const tx = db.transaction(["chunks", "takes"], "readwrite"); tx.objectStore("chunks").clear(); tx.objectStore("takes").clear(); tx.oncomplete = res; }); }
+function idbSetMeta(value) { return new Promise((res) => { const tx = db.transaction("meta", "readwrite"); tx.objectStore("meta").put(value); tx.oncomplete = res; tx.onerror = res; }); }
+// Recordings stay in the page until two newer sessions exist, so a save that fails can be retried (Recover on the setup screen).
+async function idbPrune(keepNewest) {
+  const ids = [...new Set((await idbAll("chunks")).map((c) => c.sessionId))].sort().reverse().slice(keepNewest);
+  if (!ids.length) return;
+  await new Promise((res) => {
+    const tx = db.transaction(["chunks", "takes", "meta"], "readwrite");
+    for (const s of ["chunks", "takes"]) {
+      const cur = tx.objectStore(s).openCursor();
+      cur.onsuccess = () => { const c = cur.result; if (!c) return; if (ids.includes(c.value.sessionId)) c.delete(); c.continue(); };
+    }
+    for (const id of ids) tx.objectStore("meta").delete(id);
+    tx.oncomplete = res; tx.onerror = res;
+  });
+}
+const saveMeta = () => idbSetMeta({ sessionId, settings, log, mime, width: $("live").videoWidth, height: $("live").videoHeight, updated: Date.now() });
 
 // ------------------------------------------------------------------ camera and recorder
 let stream = null, recorder = null, recStart = 0, mime = "";
@@ -285,7 +307,7 @@ async function recordRep(item, rep, reps) {
     const v = settings.checks ? judge(frames, shot, facing, takeTries, aspect) : { good: true, reason: "", metrics: {} };
     const keepAnyway = !v.good && attempt === 3;
     const entry = { id: shot.id, name: shot.name, facing, rep, attempt, start: recTime(t0), end: recTime(t1), verdict: v.good ? "good" : keepAnyway ? "kept-after-3" : "redo", reason: v.reason, metrics: v.metrics };
-    log.push(entry);
+    log.push(entry); saveMeta();
     if (v.good || keepAnyway) {
       await idbPut("takes", { sessionId, key: `${shot.id}_${facing}_${rep}`, entry, frames: packFrames(frames) });
       setStatus(v.good ? "Good" : "Kept", "good");
@@ -342,19 +364,42 @@ async function finishSession() {
   finishing = true; running = false;
   await stopRecorder();
   try { wakeLock?.release(); } catch (e) { /* ignore */ }
+  await saveMeta();
   const good = log.filter((l) => l.verdict !== "redo").length, redo = log.filter((l) => l.verdict === "redo").length;
-  $("summary").textContent = `${good} takes kept, ${redo} redone. Got through ${Math.min(idx, plan.length)} of ${plan.length} takes.`;
+  await showSave(sessionId, `${good} takes kept, ${redo} redone. Got through ${Math.min(idx, plan.length)} of ${plan.length} takes.`);
+}
+
+// The files are built before the save buttons show: iOS only opens the Share sheet straight from a tap, so the tap
+// handlers below must not wait on anything first.
+let ready = null; // { video: File, list: File }
+async function prepareFiles(sid) {
+  const chunks = (await idbAll("chunks")).filter((c) => c.sessionId === sid).sort((x, y) => x.seq - y.seq);
+  const meta = (await idbAll("meta")).find((m) => m.sessionId === sid) || { sessionId: sid, log: [], settings: {}, mime: "" };
+  const takes = (await idbAll("takes")).filter((t) => t.sessionId === sid);
+  const type = (meta.mime || (chunks[0] && chunks[0].blob.type) || "video/mp4").split(";")[0], ext = type.includes("webm") ? "webm" : "mp4";
+  const video = new File(chunks.map((c) => c.blob), `mocap_${sid}.${ext}`, { type });
+  const out = { coach: VERSION, session: sid, video: { width: meta.width, height: meta.height, mime: meta.mime }, settings: meta.settings, log: meta.log, takes: takes.map((t) => ({ key: t.key, ...t.entry, frames: t.frames })) };
+  const list = new File([JSON.stringify(out)], `mocap_${sid}_takes.json`, { type: "application/json" });
+  return { video, list, mb: (video.size / 1048576).toFixed(0), takes: takes.length };
+}
+async function showSave(sid, summary) {
   show("done");
+  $("summary").textContent = "Getting the files ready…";
+  for (const b of ["saveBothBtn", "saveVideoBtn", "saveListBtn"]) $(b).disabled = true;
+  ready = await prepareFiles(sid);
+  $("summary").textContent = `${summary} Video ${ready.mb} MB, ${ready.takes} good takes.`;
+  for (const b of ["saveBothBtn", "saveVideoBtn", "saveListBtn"]) $(b).disabled = false;
+}
+function saveFiles(files) {
+  if (navigator.canShare && navigator.canShare({ files })) {
+    navigator.share({ files }).catch((e) => { if (e.name !== "AbortError") downloadFiles(files); });
+  } else downloadFiles(files);
+}
+function downloadFiles(files) {
+  for (const f of files) { const a = document.createElement("a"); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); }
 }
 
 function stamp() { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; }
-async function saveBlob(blob, name) {
-  const file = new File([blob], name, { type: blob.type });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === "AbortError") return; }
-  }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
-}
 
 // ------------------------------------------------------------------ wiring
 async function main() {
@@ -395,7 +440,7 @@ async function main() {
     plan = buildPlan(settings.session, settings.side); idx = +$("startPick").value; log = []; finishing = false; paused = false;
     sessionId = stamp();
     unlockVoice("Starting."); // iOS only lets a page talk after it has spoken inside a tap
-    await idbClear();
+    await idbPrune(2); saveMeta();
     show("run"); videoEl = $("live"); overlayEl = $("liveOverlay");
     await keepAwake();
     await startRecorder(sessionId);
@@ -408,17 +453,21 @@ async function main() {
   $("skipBtn").onclick = () => { skip = true; };
   $("backBtn").onclick = () => { back = true; };
   $("finishBtn").onclick = () => { if (confirm("Finish the session now?")) { finishing = true; } };
-  $("saveVideoBtn").onclick = async () => {
-    const chunks = (await idbAll("chunks")).filter((c) => c.sessionId === sessionId).sort((a, b) => a.seq - b.seq);
-    const type = (mime || "video/mp4").split(";")[0], ext = type.includes("webm") ? "webm" : "mp4";
-    await saveBlob(new Blob(chunks.map((c) => c.blob), { type }), `mocap_${sessionId}.${ext}`);
-  };
-  $("saveListBtn").onclick = async () => {
-    const takes = (await idbAll("takes")).filter((t) => t.sessionId === sessionId);
-    const vw = $("live").videoWidth, vh = $("live").videoHeight;
-    const out = { coach: VERSION, session: sessionId, video: { width: vw, height: vh, mime }, settings, log, takes: takes.map((t) => ({ key: t.key, ...t.entry, frames: t.frames })) };
-    await saveBlob(new Blob([JSON.stringify(out)], { type: "application/json" }), `mocap_${sessionId}_takes.json`);
-  };
+  $("saveBothBtn").onclick = () => { if (ready) saveFiles([ready.video, ready.list]); };
+  $("saveVideoBtn").onclick = () => { if (ready) saveFiles([ready.video]); };
+  $("saveListBtn").onclick = () => { if (ready) saveFiles([ready.list]); };
+  // Recover: any recording still stored in the page (newest first), e.g. after a save that didn't go through.
+  const stored = [...new Set((await idbAll("chunks")).map((c) => c.sessionId))].sort().reverse();
+  const box = $("recoverBox");
+  for (const sid of stored) {
+    const b = document.createElement("button");
+    const m = sid.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})$/);
+    b.textContent = m ? `Recover the recording from ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m[2] - 1]} ${+m[3]}, ${m[4]}:${m[5]}` : `Recover recording ${sid}`;
+    b.className = "big";
+    b.onclick = () => showSave(sid, "Recovered recording.");
+    box.appendChild(b);
+  }
+  box.classList.toggle("hidden", !stored.length);
   $("againBtn").onclick = () => location.reload();
 }
 main();

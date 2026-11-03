@@ -38,6 +38,7 @@
   <button id="voiceBtn">Test the voice</button>
   <p class="small">For a natural voice: iPhone Settings › Accessibility › Spoken Content › Voices › English, download one marked <b>Premium</b> (for example Ava or Zoe), then reload this page and pick it above.</p>
   <p class="small">No sound? Turn off silent mode (the switch or Action button on the side of the iPhone) and turn the volume up, then test again.</p>
+  <div id="recoverBox" class="hidden"><p class="small">These recordings are still stored in this page, not saved yet (or the save didn't go through):</p></div>
   <p id="loadStatus" class="small">Loading the body tracker…</p>
   <button id="startBtn" class="big" disabled>Start, then walk to your spot</button>
   <p class="small">You don't need to be in frame to press Start. Tap it, walk to your spot, and the coach begins on its own once it can see all of you. After that you never touch the phone: step out of the frame to pause, step back in to carry on.</p>
@@ -60,9 +61,10 @@
 <main id="done" class="screen hidden">
   <h1>Session finished</h1>
   <p id="summary"></p>
-  <button id="saveVideoBtn" class="big">Save video</button>
-  <button id="saveListBtn" class="big">Save take list</button>
-  <p class="small">Save both, then copy them to <code>Reference\Owner\Mocap</code> on the PC (cable or iCloud) and tell Claude. Keep this page open until both are saved.</p>
+  <button id="saveBothBtn" class="big">Save video and take list</button>
+  <button id="saveVideoBtn">Save video only</button>
+  <button id="saveListBtn">Save take list only</button>
+  <p class="small">In the Share sheet pick <b>Save to Files</b>. Then copy them to <code>Reference\Owner\Mocap</code> on the PC (cable or iCloud) and tell Claude. Keep this page open until both are saved.</p>
   <button id="againBtn">Start another session</button>
 </main>
 
