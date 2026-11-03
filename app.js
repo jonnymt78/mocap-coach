@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.7";
+const VERSION = "1.8";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -119,9 +119,22 @@ function drawOverlay() {
 
 // ------------------------------------------------------------------ voice
 let voice = null;
+// English voices, most natural first: an iPhone's downloaded Premium and Enhanced voices sound far more human than the
+// default compact ones. The picker in the setup lists them; the choice is remembered.
+function englishVoices() {
+  const rank = (v) => (/premium/i.test(v.name) ? 0 : /enhanced|neural|natural/i.test(v.name) ? 1 : 2) * 10 + (/en[-_](US|GB)/i.test(v.lang) ? 0 : 1);
+  return speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang) && !/novelty|bells|bubbles|cellos|whisper|zarvox|trinoids|organ|bad news|good news|jester|superstar|wobble|boing|bahh|albert|fred|junior|ralph|kathy|grandma|grandpa|rocko|shelley|eddy|flo|reed|sandy/i.test(v.name)).sort((x, y) => rank(x) - rank(y));
+}
 function pickVoice() {
-  const vs = speechSynthesis.getVoices();
-  voice = vs.find((v) => /en[-_](GB|US)/i.test(v.lang) && /Daniel|Samantha|Karen|Moira|Arthur|Serena/i.test(v.name)) || vs.find((v) => /^en/i.test(v.lang)) || null;
+  const vs = englishVoices();
+  let saved = null; try { saved = localStorage.getItem("mocap-voice"); } catch (e) { /* private mode */ }
+  voice = vs.find((v) => v.voiceURI === saved) || vs[0] || null;
+  const pick = document.getElementById("voicePick");
+  if (pick && vs.length) {
+    pick.innerHTML = "";
+    for (const v of vs) pick.add(new Option(v.name + (v.localService ? "" : " (online)"), v.voiceURI));
+    if (voice) pick.value = voice.voiceURI;
+  }
 }
 speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
 // iOS Safari only lets a page speak once it has spoken a real (non-empty) line inside a tap.
@@ -132,7 +145,7 @@ function speak(text) {
   return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
-    u.rate = 1.0; u.volume = 1;
+    u.rate = 1.08; u.volume = 1;
     let done = false; const finish = () => { if (!done) { done = true; resolve(); } };
     u.onend = finish; u.onerror = finish;
     setTimeout(finish, 1500 + text.length * 90); // iOS sometimes never fires onend
@@ -260,7 +273,7 @@ async function recordRep(item, rep, reps) {
   const aspect = videoEl.videoWidth / videoEl.videoHeight || 16 / 9;
   for (let attempt = 1; attempt <= 3 && !finishing; attempt++) {
     if (!(await waitReady(item))) return;
-    setStatus("3"); await speak("Three."); setStatus("2"); await speak("Two."); setStatus("1"); await speak("One.");
+    setStatus("3 · 2 · 1"); await speak("Three, two, one.");
     setStatus("Go", "good"); speak("Go.");
     const t0 = performance.now(); takeFrames = []; takeTries = 0;
     while (performance.now() - t0 < shot.secs * 1000 && !finishing && !skip && !back) await sleep(50);
@@ -385,7 +398,9 @@ async function main() {
     await startRecorder(sessionId);
     runSession();
   };
-  $("voiceBtn").onclick = () => { pickVoice(); unlockVoice("Hello. If you can hear me, the coach's voice is working."); };
+  $("voicePick").onchange = () => { voice = englishVoices().find((v) => v.voiceURI === $("voicePick").value) || voice; try { localStorage.setItem("mocap-voice", voice.voiceURI); } catch (e) { /* private mode */ } unlockVoice("Hi. This is how I'll sound."); };
+  $("voiceBtn").onclick = () => { if (!voice) pickVoice(); unlockVoice("Hi. If you can hear me, the voice is working."); };
+  pickVoice();
   $("pauseBtn").onclick = () => { paused = !paused; $("pauseBtn").textContent = paused ? "Resume" : "Pause"; setStatus(paused ? "Paused" : ""); };
   $("skipBtn").onclick = () => { skip = true; };
   $("backBtn").onclick = () => { back = true; };
