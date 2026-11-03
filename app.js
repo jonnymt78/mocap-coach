@@ -7,7 +7,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.0";
+const VERSION = "1.1";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -25,7 +25,9 @@ async function loadTracker() {
 }
 
 // Landmark indices (MediaPipe Pose).
-const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 31], [28, 32], [0, 11], [0, 12]];
+// Every one of the tracker's 33 points is drawn and recorded: face, shoulders, elbows, wrists, three points per hand,
+// hips, knees, ankles, heels and toes.
+const BONES = PoseLandmarker.POSE_CONNECTIONS.map((c) => [c.start, c.end]);
 
 let latest = null;            // { t, lm, wl } the newest tracked pose, or null when nobody is seen
 let lastSeen = 0;             // performance.now() when a body was last seen
@@ -70,6 +72,8 @@ function drawOverlay() {
   const ok = framing(latest.lm).ok;
   g.lineWidth = 4; g.strokeStyle = ok ? "rgba(63,191,111,.9)" : "rgba(224,87,74,.9)";
   for (const [a, b] of BONES) { const [x1, y1] = P(a), [x2, y2] = P(b); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+  g.fillStyle = "#fff";
+  for (let i = 0; i < latest.lm.length; i++) { const [x, y] = P(i); g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fill(); }
 }
 
 // ------------------------------------------------------------------ voice
