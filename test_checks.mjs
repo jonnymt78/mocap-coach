@@ -3,7 +3,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const ASPECT = 16 / 9;
 // A standing body centred at x=cx, facing front (shoulder half-width sw) or side (small sw), image coords 0..1.
-function pose({ cx = 0.5, sw = 0.05, hipY = 0.55, armSwing = 0, legSwing = 0, low = 0 } = {}) {
+function pose({ cx = 0.5, sw = 0.05, hipY = 0.55, armSwing = 0, legSwing = 0, low = 0, near = null } = {}) {
   const lm = Array.from({ length: 33 }, () => ({ x: cx, y: 0.5, visibility: 0.99 }));
   const set = (i, x, y) => { lm[i] = { x, y, visibility: 0.99 }; };
   const hy = hipY + low;
@@ -12,6 +12,8 @@ function pose({ cx = 0.5, sw = 0.05, hipY = 0.55, armSwing = 0, legSwing = 0, lo
   set(15, cx - sw - 0.02 + armSwing, 0.5 + low); set(16, cx + sw + 0.02 - armSwing, 0.5 + low); // wrists
   set(23, cx - sw * 0.7, hy); set(24, cx + sw * 0.7, hy);       // hips
   set(27, cx - 0.03 + legSwing, Math.min(0.9, 0.9 + low * 0.2)); set(28, cx + 0.03 - legSwing, Math.min(0.9, 0.9 + low * 0.2)); // ankles
+  if (near) { const [n, f] = near === "L" ? [[11, 23], [12, 24]] : [[12, 24], [11, 23]]; for (const i of n) lm[i].z = -0.2; for (const i of f) lm[i].z = 0.2; }
+  else for (const p of lm) p.z = 0;
   return lm;
 }
 const frames = (n, fn) => Array.from({ length: n }, (_, i) => ({ t: i * 33, lm: fn(i) }));
@@ -49,5 +51,12 @@ expect("lost sight fails", !v.good && /lost sight/.test(v.reason), v.reason);
 const outFrames = frames(150, (i) => { const p = pose({ sw: 0.06 }); if (i % 2) { p[27].y = 0.995; p[28].y = 0.995; } return p; });
 v = judge(outFrames, shot("still"), "front", 150, ASPECT);
 expect("feet out half the time fails", !v.good && /feet/.test(v.reason), v.reason);
+const sideL = pose({ sw: 0.01, near: "L" }), sideR = pose({ sw: 0.01, near: "R" });
+expect("left side shown counts as sideL", facingOk(sideL, ASPECT, "sideL") && !facingOk(sideL, ASPECT, "sideR"));
+expect("right side shown counts as sideR", facingOk(sideR, ASPECT, "sideR") && !facingOk(sideR, ASPECT, "sideL"));
+v = judge(frames(150, () => pose({ sw: 0.01, near: "L" })), shot("still"), "sideR", 150, ASPECT);
+expect("wrong side fails with the side named", !v.good && /right side/.test(v.reason), v.reason);
+v = judge(frames(150, () => pose({ sw: 0.01, near: "R" })), shot("still"), "sideR", 150, ASPECT);
+expect("right side take passes", v.good, JSON.stringify(v));
 console.log(fails ? `${fails} FAILED` : "all passed");
 process.exit(fails ? 1 : 0);

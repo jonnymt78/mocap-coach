@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.2";
+const VERSION = "1.3";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -184,13 +184,15 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 function buildPlan(sessionIdx, sideMode) {
   const plan = [];
   for (const shot of SHOTS.filter((s) => sessionIdx < 0 || s.s === sessionIdx)) {
-    const facings = shot.sideOnly ? ["side"] : shot.frontOnly ? ["front"]
-      : sideMode === "none" ? ["front"] : sideMode === "key" && !KEY_SIDE.has(shot.id) ? ["front"] : ["front", "side"];
+    const sides = shot.both ? ["sideL", "sideR"] : ["sideL"];
+    const facings = shot.sideOnly ? sides : shot.frontOnly ? ["front"]
+      : sideMode === "none" ? ["front"] : sideMode === "key" && !KEY_SIDE.has(shot.id) && !shot.both ? ["front"] : ["front", ...sides];
     for (const facing of facings) plan.push({ shot, facing });
   }
   return plan;
 }
-const facingWords = (f) => (f === "front" ? "facing the camera" : "side-on, left side to the camera");
+const facingWords = (f) => (f === "front" ? "facing the camera" : f === "sideR" ? "side-on, right side to the camera" : "side-on, left side to the camera");
+const facingTag = (f) => (f === "front" ? "FRONT" : f === "sideR" ? "RIGHT SIDE" : "LEFT SIDE");
 
 // ------------------------------------------------------------------ session
 let running = false, paused = false, skip = false, back = false, finishing = false;
@@ -221,7 +223,7 @@ async function waitReady(item) {
       okSince = 0;
       if (now - lastHint > 7000) {
         lastHint = now;
-        const hint = !latest ? "Step into the frame." : f.missing.size ? `I can't see your ${[...f.missing][0]}.` : !f.centred ? "Move to the middle." : item.facing === "front" ? "Face the camera." : "Turn side-on, left side to the camera.";
+        const hint = !latest ? "Step into the frame." : f.missing.size ? `I can't see your ${[...f.missing][0]}.` : !f.centred ? "Move to the middle." : item.facing === "front" ? "Face the camera." : `Turn ${facingWords(item.facing)}.`;
         setStatus(hint, "bad"); await speak(hint); setStatus("");
       }
     }
@@ -269,7 +271,7 @@ function updateProgress() {
   const item = plan[idx];
   $("progress").textContent = `${idx + 1} / ${plan.length}`;
   if (!item) return;
-  $("takeLabel").textContent = `${item.shot.id} · ${item.shot.name} · ${item.facing === "front" ? "FRONT" : "SIDE"}`;
+  $("takeLabel").textContent = `${item.shot.id} · ${item.shot.name} · ${facingTag(item.facing)}`;
   $("takeSay").textContent = `${item.shot.say}  Prop: ${item.shot.prop}.`;
   try { localStorage.setItem("mocap-progress", JSON.stringify({ ...settings, idx })); } catch (e) { /* private mode */ }
 }
@@ -316,7 +318,7 @@ async function main() {
   sp.add(new Option("Everything, start to finish", -1));
   const fillStart = () => {
     const p = buildPlan(+sp.value, $("sidePick").value), st = $("startPick"); st.innerHTML = "";
-    p.forEach((it, i) => st.add(new Option(`${i + 1}. ${it.shot.id} ${it.shot.name} (${it.facing})`, i)));
+    p.forEach((it, i) => st.add(new Option(`${i + 1}. ${it.shot.id} ${it.shot.name} (${facingTag(it.facing).toLowerCase()})`, i)));
   };
   sp.onchange = fillStart; $("sidePick").onchange = fillStart; fillStart();
   try { // resume where the last session stopped

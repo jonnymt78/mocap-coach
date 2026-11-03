@@ -19,9 +19,14 @@ export function torso(lm, aspect) {
 }
 // Shoulder width over torso length: large facing the camera, small side-on.
 export function facingRatio(lm, aspect) { return Math.abs(lm[LSH].x - lm[RSH].x) * aspect / torso(lm, aspect); }
+// Which side is nearer the camera when side-on: the tracker's depth (z, smaller = nearer) of the two shoulders and hips.
+export function nearSide(lm) { return lm[LSH].z + lm[LHIP].z < lm[RSH].z + lm[RHIP].z ? "L" : "R"; }
+// facing: "front", "sideL" (left side to the camera) or "sideR"; plain "side" accepts either side.
 export function facingOk(lm, aspect, facing) {
   const r = facingRatio(lm, aspect);
-  return facing === "front" ? r > 0.45 : r < 0.42;
+  if (facing === "front") return r > 0.45;
+  if (r >= 0.42) return false;
+  return facing === "side" || nearSide(lm) === (facing === "sideR" ? "R" : "L");
 }
 export function median(a) { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; }
 
@@ -44,7 +49,13 @@ export function judge(frames, shot, facing, tries, aspect) {
     const r = median(frames.map((f) => facingRatio(f.lm, aspect)));
     metrics.facing = r;
     if (facing === "front" && r < 0.4) return { good: false, reason: "Face the camera for this one.", metrics };
-    if (facing === "side" && r > 0.5) return { good: false, reason: "Turn side-on, left side to the camera.", metrics };
+    const wantSide = facing === "sideR" ? "R" : facing === "sideL" ? "L" : null;
+    if (facing !== "front" && r > 0.5) return { good: false, reason: `Turn side-on, ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
+    if (wantSide) {
+      const near = frames.filter((f) => nearSide(f.lm) === wantSide).length / frames.length;
+      metrics.nearSide = near;
+      if (near < 0.6) return { good: false, reason: `Wrong side. Turn your ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
+    }
   }
   // Motion
   const T = median(frames.map((f) => torso(f.lm, aspect)));
