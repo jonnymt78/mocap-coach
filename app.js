@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.6";
+const VERSION = "1.7";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -299,8 +299,9 @@ function updateProgress() {
   try { localStorage.setItem("mocap-progress", JSON.stringify({ ...settings, idx })); } catch (e) { /* private mode */ }
 }
 
+let lastProp = null;
 async function runSession() {
-  running = true;
+  running = true; lastProp = null;
   setStatus("Walk to your spot");
   await speak(`Walk to your spot. I'll begin as soon as I can see all of you. ${plan.length} takes. Step out of the frame any time to pause.`);
   setStatus("");
@@ -308,7 +309,12 @@ async function runSession() {
     updateProgress();
     const item = plan[idx], reps = item.shot.reps || 1;
     skip = back = false;
-    await speak(`${item.shot.id}. ${item.shot.name}, ${facingWords(item.facing)}. ${item.shot.say}${reps > 1 ? ` ${reps} times.` : ""}`);
+    // Props: say what this take needs; when it changes from the last take, give time to fetch it (stepping out of frame
+    // to get it pauses the coach until you're back).
+    const prop = item.shot.prop && item.shot.prop !== "none" ? item.shot.prop : "no prop";
+    if (prop !== lastProp) { setStatus(`Prop: ${prop}`); await speak(prop === "no prop" ? "Put your props down. This one needs nothing in your hands." : `Prop change. Grab the ${prop}. I'll wait.`); await sleep(4000); setStatus(""); }
+    lastProp = prop;
+    await speak(`${item.shot.id}. ${item.shot.name}, ${facingWords(item.facing)}. ${item.shot.say}${reps > 1 ? ` ${reps} times.` : ""}${prop !== "no prop" ? ` With the ${prop}.` : ""}`);
     for (let rep = 1; rep <= reps && !skip && !back && !finishing; rep++) await recordRep(item, rep, reps);
     if (back) { idx = Math.max(0, idx - 1); continue; }
     idx++;

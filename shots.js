@@ -12,8 +12,8 @@ export const SESSIONS = [
 
 export const SHOTS = [
   // Session 1: battle loops
-  { id: "A01", s: 0, name: "Idle", say: "Stand at ease. Shift your weight a little, breathe, glance around now and then.", kind: "still", secs: 20, prop: "sword stick in your right hand" },
-  { id: "A02", s: 0, name: "Attention", say: "Stand to attention. Chin up, still.", kind: "still", secs: 10, prop: "sword stick at your side" },
+  { id: "A01", s: 0, name: "Idle", say: "Stand at ease, sword in your right hand. Shift your weight a little, breathe, glance around now and then.", kind: "still", secs: 20, prop: "sword stick" },
+  { id: "A02", s: 0, name: "Attention", say: "Stand to attention, sword at your side. Chin up, still.", kind: "still", secs: 10, prop: "sword stick" },
   { id: "A03", s: 0, name: "Walk", say: "Steady marching walk, on the spot.", kind: "loop", secs: 10, prop: "sword stick", both: true },
   { id: "A04", s: 0, name: "Run", say: "Run on the spot. A running pace, not a sprint.", kind: "loop", secs: 8, prop: "sword stick", both: true },
   { id: "B01", s: 0, name: "Idle, pike", say: "Stand holding the pole upright, both hands on it.", kind: "still", secs: 20, prop: "broom handle" },
@@ -29,8 +29,8 @@ export const SHOTS = [
   { id: "A07", s: 1, name: "Charge", say: "Three running steps on the spot into a big swing.", kind: "shot", secs: 6, reps: 3, prop: "sword stick and shield", both: true },
   { id: "A08", s: 1, name: "Block", say: "Raise the shield to take a hit, hold a moment, lower it.", kind: "shot", secs: 5, reps: 3, prop: "shield", both: true },
   { id: "A09", s: 1, name: "Flinch", say: "Get hit. Jolt back, stagger, recover to ready.", kind: "shot", secs: 5, reps: 3, prop: "sword stick", both: true },
-  { id: "A10", s: 1, name: "Death, backwards", say: "Hit from the front. Fall onto your back onto the cushions, then lie still.", kind: "fall", secs: 8, reps: 3, prop: "let the stick drop" },
-  { id: "A11", s: 1, name: "Death, crumple", say: "Knees give way. Crumple forward and to the side, then lie still.", kind: "fall", secs: 8, reps: 3, prop: "let the stick drop" },
+  { id: "A10", s: 1, name: "Death, backwards", say: "Hit from the front. Fall onto your back onto the cushions, then lie still.", kind: "fall", secs: 8, reps: 3, prop: "sword stick, cushions down" },
+  { id: "A11", s: 1, name: "Death, crumple", say: "Knees give way. Crumple forward and to the side, then lie still.", kind: "fall", secs: 8, reps: 3, prop: "sword stick, cushions down" },
   { id: "A12", s: 1, name: "Kneel", say: "Go down on your right knee, hold, then stand back up.", kind: "kneel", secs: 8, reps: 3, prop: "sword stick", both: true },
   { id: "A13", s: 1, name: "Exhausted", say: "Bent over, hands on your knees, catching your breath.", kind: "still", secs: 15, prop: "none" },
   { id: "B04", s: 1, name: "Thrust, pike", say: "Two-handed thrust forward, then recover.", kind: "shot", secs: 5, reps: 3, prop: "broom handle", both: true },
@@ -81,8 +81,8 @@ export const SHOTS = [
   { id: "D11", s: 3, name: "Talk, angry", say: "Argue. Sharp gestures, a step forward.", kind: "still", secs: 15, prop: "none" },
   { id: "D12", s: 3, name: "Point", say: "Point at something far away, hold, lower.", kind: "shot", secs: 5, reps: 2, prop: "none", both: true },
   { id: "D13", s: 3, name: "Look around", say: "Look left, right and up, a little wary.", kind: "still", secs: 12, prop: "none" },
-  { id: "D14", s: 3, name: "Pick up", say: "Bend, pick up something small, look at it.", kind: "shot", secs: 6, reps: 2, prop: "anything small", both: true },
-  { id: "D15", s: 3, name: "Hand over", say: "Hand an object to someone in front of you.", kind: "shot", secs: 5, reps: 2, prop: "anything small", both: true },
+  { id: "D14", s: 3, name: "Pick up", say: "Bend, pick up something small, look at it.", kind: "shot", secs: 6, reps: 2, prop: "something small", both: true },
+  { id: "D15", s: 3, name: "Hand over", say: "Hand an object to someone in front of you.", kind: "shot", secs: 5, reps: 2, prop: "something small", both: true },
   { id: "D16", s: 3, name: "Read letter", say: "Unfold and read a letter in both hands, react.", kind: "shot", secs: 8, reps: 2, prop: "paper" },
   { id: "D17", s: 3, name: "Open door", say: "Push a door open and step through.", kind: "shot", secs: 5, reps: 2, prop: "none" },
   { id: "D18", s: 3, name: "Torch high", say: "Hold a torch up high to see.", kind: "still", secs: 12, prop: "stick" },
