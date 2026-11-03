@@ -64,16 +64,18 @@ export function judge(frames, shot, facing, tries, aspect) {
   if (metrics.offCentre > 0.3) return { good: false, reason: "Move back to the middle of the frame.", metrics };
   // Facing (skip for falls and kneels, which turn the body)
   if (shot.kind !== "fall" && shot.kind !== "kneel") {
-    // The share of frames facing the asked way: lenient, since a move can turn the body for a moment.
+    // Facing is only a loose guide: a fighting stance turns the body (staggered feet, an open chest), so a take is redone
+    // only when it was clearly filmed the wrong way round, and never for a strike, fall or kneel.
     const square = frames.filter((f) => facingOk(f.lm, aspect, "front", f.wl)).length / frames.length;
     metrics.facingFront = square;
-    if (facing === "front" && square < 0.4) return { good: false, reason: "Face the camera for this one.", metrics };
+    const loose = shot.kind === "still" || shot.kind === "loop";
     const wantSide = facing === "sideR" ? "R" : facing === "sideL" ? "L" : null;
-    if (facing !== "front" && square > 0.7) return { good: false, reason: `Turn side-on, ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
-    if (wantSide) {
+    if (loose && facing === "front" && square < 0.1) return { good: false, reason: "Face the camera for this one.", metrics };
+    if (loose && facing !== "front" && square > 0.95) return { good: false, reason: `Turn side-on, ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
+    if (wantSide && facing !== "front" && square < 0.5) {
       const near = frames.filter((f) => nearSide(f.lm) === wantSide).length / frames.length;
       metrics.nearSide = near;
-      if (near < 0.6) return { good: false, reason: `Wrong side. Turn your ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
+      if (near < 0.15) return { good: false, reason: `Wrong side. Turn your ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
     }
   }
   // Motion

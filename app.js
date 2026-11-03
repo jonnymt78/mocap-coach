@@ -3,12 +3,12 @@
 // take is checked, and the session saves as one video plus a take list (start/end of every take, verdict, and the tracked
 // body and hand landmarks) for cutting on the PC.
 import { PoseLandmarker, HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
-import { SESSIONS, SHOTS, KEY_SIDE } from "./shots.js?v=2.3";
-import { framing, facingOk, judge } from "./checks.js?v=2.3";
+import { SESSIONS, SHOTS, KEY_SIDE } from "./shots.js?v=2.4";
+import { framing, facingOk, judge } from "./checks.js?v=2.4";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "2.3";
+const VERSION = "2.4";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -276,7 +276,7 @@ async function waitReady(item) {
     if (awaySaid) { awaySaid = false; setStatus(""); await speak(`Welcome back. ${item.shot.name}, ${facingWords(item.facing)}.`); lastHint = performance.now(); }
     const f = latest && framing(latest.lm);
     const faceOk = latest && (item.shot.kind === "fall" || item.shot.kind === "kneel" || item.shot.sideOnly || facingOk(latest.lm, aspect, item.facing, latest.wl));
-    if (f && f.ok && (faceOk || facingHints >= 2)) { if (!okSince) okSince = now; if (now - okSince > 1200) return true; }
+    if (f && f.ok && (faceOk || facingHints >= 1)) { if (!okSince) okSince = now; if (now - okSince > 1200) return true; }
     else {
       okSince = 0;
       if (now - lastHint > 7000) {
