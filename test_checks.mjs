@@ -66,5 +66,11 @@ expect("3D front wins over a narrow 2D look", facingOk(narrow, ASPECT, "front", 
 expect("3D side is not front", !facingOk(narrow, ASPECT, "front", wlSide));
 v = judge(frames(150, () => pose({ sw: 0.01 })).map((f) => ({ ...f, wl: wlFront })), shot("still"), "front", 150, ASPECT);
 expect("front take passes on 3D facing", v.good, JSON.stringify(v));
+const hiddenHand = pose({ sw: 0.01, near: "L" }); hiddenHand[16].visibility = 0.1; hiddenHand[28].visibility = 0.1; hiddenHand[30].visibility = 0.1; hiddenHand[32].visibility = 0.1;
+expect("far hand and foot hidden behind the body is fine", framing(hiddenHand).ok, JSON.stringify([...framing(hiddenHand).missing]));
+const handOut = pose({ sw: 0.06 }); handOut[15].x = -0.05; handOut[15].visibility = 0.2;
+expect("a hand past the edge is missing", framing(handOut).missing.has("hands"));
+const noHands = pose({ sw: 0.06 }); noHands[15].visibility = 0.1; noHands[16].visibility = 0.1;
+expect("no hand seen at all is missing", framing(noHands).missing.has("hands"));
 console.log(fails ? `${fails} FAILED` : "all passed");
 process.exit(fails ? 1 : 0);

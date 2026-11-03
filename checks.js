@@ -1,14 +1,22 @@
 export const NOSE = 0, LSH = 11, RSH = 12, LWR = 15, RWR = 16, LHIP = 23, RHIP = 24, LANK = 27, RANK = 28;
 // Pure checks on MediaPipe Pose landmarks (normalised image coordinates). No browser APIs, so Node can test them.
-const KEY = [[NOSE, "head"], [LWR, "hands"], [RWR, "hands"], [LANK, "feet"], [RANK, "feet"]];
+// Each part and its points: the head, both hands (wrists) and both feet (ankle, heel, toe).
+const PARTS = { head: [[NOSE]], hands: [[LWR], [RWR]], feet: [[LANK, LANK + 2, LANK + 4], [RANK, RANK + 2, RANK + 4]] };
 const MARGIN = 0.015;
+const inside = (p) => p.x >= MARGIN && p.x <= 1 - MARGIN && p.y >= MARGIN && p.y <= 1 - MARGIN;
+// A part is missing when any of its points lies past the edge of the picture (the tracker still places points it can't
+// see), or when none of it can be seen at all. A hand or foot hidden behind the body, as in a side-on take, is fine as
+// long as the other one shows.
 export function framing(lm) {
   const missing = new Set();
-  for (const [i, part] of KEY) {
-    const p = lm[i];
-    // Feet: bare feet on a pale floor read faintly, so a lower visibility bar; the heel or toe on the floor counts too.
-    const vis = part === "feet" ? Math.max(p.visibility ?? 1, lm[i + 2].visibility ?? 0, lm[i + 4].visibility ?? 0) : (p.visibility ?? 1);
-    if (vis < (part === "feet" ? 0.3 : 0.5) || p.x < MARGIN || p.x > 1 - MARGIN || p.y < MARGIN || p.y > 1 - MARGIN) missing.add(part);
+  for (const [part, groups] of Object.entries(PARTS)) {
+    const bar = part === "feet" ? 0.3 : 0.5; // bare feet on a pale floor read faintly
+    let seen = false, out = false;
+    for (const g of groups) {
+      if (!inside(lm[g[0]])) out = true;
+      if (Math.max(...g.map((i) => lm[i].visibility ?? 1)) >= bar) seen = true;
+    }
+    if (out || !seen) missing.add(part);
   }
   const hipX = (lm[LHIP].x + lm[RHIP].x) / 2;
   const centred = hipX > 0.22 && hipX < 0.78;
