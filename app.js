@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.4";
+const VERSION = "1.5";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -124,11 +124,15 @@ function pickVoice() {
   voice = vs.find((v) => /en[-_](GB|US)/i.test(v.lang) && /Daniel|Samantha|Karen|Moira|Arthur|Serena/i.test(v.name)) || vs.find((v) => /^en/i.test(v.lang)) || null;
 }
 speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
+// iOS Safari only lets a page speak once it has spoken a real (non-empty) line inside a tap.
+function unlockVoice(text) {
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); if (voice) u.voice = voice; u.volume = 1; speechSynthesis.speak(u); } catch (e) { /* no speech */ }
+}
 function speak(text) {
   return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
-    u.rate = 1.0;
+    u.rate = 1.0; u.volume = 1;
     let done = false; const finish = () => { if (!done) { done = true; resolve(); } };
     u.onend = finish; u.onerror = finish;
     setTimeout(finish, 1500 + text.length * 90); // iOS sometimes never fires onend
@@ -351,13 +355,14 @@ async function main() {
     settings = { session: +sp.value, side: $("sidePick").value, checks: $("checksOn").checked && !!landmarker };
     plan = buildPlan(settings.session, settings.side); idx = +$("startPick").value; log = []; finishing = false; paused = false;
     sessionId = stamp();
-    speechSynthesis.speak(new SpeechSynthesisUtterance("")); // unlock speech on iOS inside the tap
+    unlockVoice("Starting."); // iOS only lets a page talk after it has spoken inside a tap
     await idbClear();
     show("run"); videoEl = $("live"); overlayEl = $("liveOverlay");
     await keepAwake();
     await startRecorder(sessionId);
     runSession();
   };
+  $("voiceBtn").onclick = () => { pickVoice(); unlockVoice("Hello. If you can hear me, the coach's voice is working."); };
   $("pauseBtn").onclick = () => { paused = !paused; $("pauseBtn").textContent = paused ? "Resume" : "Pause"; setStatus(paused ? "Paused" : ""); };
   $("skipBtn").onclick = () => { skip = true; };
   $("backBtn").onclick = () => { back = true; };
