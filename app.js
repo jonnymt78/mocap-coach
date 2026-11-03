@@ -1,28 +1,61 @@
 // Mocap Coach: a hands-free motion-capture session on one phone. The back camera records one continuous video, the coach
-// calls each move out loud, MediaPipe Pose (running on the phone) checks each take, and the session saves as one video
-// plus a take list (start/end of every take, verdict, and the tracked body landmarks) for cutting on the PC.
-import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+// calls each move out loud, MediaPipe Pose and Hand Landmarker (running on the phone) track the body and both hands, each
+// take is checked, and the session saves as one video plus a take list (start/end of every take, verdict, and the tracked
+// body and hand landmarks) for cutting on the PC.
+import { PoseLandmarker, HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 import { SESSIONS, SHOTS, KEY_SIDE } from "./shots.js";
 import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.1";
+const VERSION = "1.2";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-let landmarker = null;
+const HAND_MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+let landmarker = null, handLandmarker = null;
 async function loadTracker() {
   const vision = await FilesetResolver.forVisionTasks(WASM);
   for (const delegate of ["GPU", "CPU"]) {
     try {
       landmarker = await PoseLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: "VIDEO", numPoses: 1 });
-      return delegate;
+      try { // the hand tracker is a bonus: the session still runs without it
+        handLandmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: HAND_MODEL, delegate }, runningMode: "IMAGE", numHands: 1, minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3 });
+      } catch (e) { console.warn("hands", delegate, e); }
+      return delegate + (handLandmarker ? ", hands on" : ", hands off");
     } catch (e) { console.warn("tracker", delegate, e); }
   }
   throw new Error("The body tracker would not start on this phone.");
 }
+
+// Hands: at 3-4 m a hand is only a few dozen pixels, too small for the hand tracker on the whole frame. So each frame one
+// hand (left and right in turn) is cut out around the body tracker's wrist, index and pinky points, scaled up to 256 px,
+// tracked, and its 21 points mapped back to the full frame. A hand's last result is kept for 200 ms.
+const HAND_CROP = 256, handCanvas = document.createElement("canvas");
+handCanvas.width = handCanvas.height = HAND_CROP;
+const handCtx = handCanvas.getContext("2d", { willReadFrequently: true });
+const hands = { L: null, R: null };   // { t, lm: 21 x {x,y,z} full-frame normalised, wl: 21 x {x,y,z} metres }
+let handTurn = 0;
+function trackHand(lm, now) {
+  if (!handLandmarker) return;
+  const side = handTurn++ % 2 ? "R" : "L";
+  const [wr, pk, ix] = side === "L" ? [15, 17, 19] : [16, 18, 20];
+  const W = videoEl.videoWidth, H = videoEl.videoHeight;
+  if ((lm[wr].visibility ?? 1) < 0.3) { hands[side] = null; return; }
+  const cx = (lm[wr].x + (lm[pk].x + lm[ix].x) / 2) / 2 * W, cy = (lm[wr].y + (lm[pk].y + lm[ix].y) / 2) / 2 * H;
+  const sh = Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H);
+  const size = Math.max(64, Math.min(H, sh * 1.1)); // a hand is about half a shoulder width; leave room for spread fingers
+  const sx = cx - size / 2, sy = cy - size / 2;
+  handCtx.fillStyle = "#000"; handCtx.fillRect(0, 0, HAND_CROP, HAND_CROP);
+  handCtx.drawImage(videoEl, sx, sy, size, size, 0, 0, HAND_CROP, HAND_CROP);
+  let r = null;
+  try { r = handLandmarker.detect(handCanvas); } catch (e) { /* a dropped frame */ }
+  const h = r && r.landmarks && r.landmarks[0];
+  if (!h) { if (hands[side] && now - hands[side].t > 200) hands[side] = null; return; }
+  hands[side] = { t: now, lm: h.map((p) => ({ x: (sx + p.x * size) / W, y: (sy + p.y * size) / H, z: p.z })), wl: r.worldLandmarks && r.worldLandmarks[0] };
+}
+const HAND_BONES = HandLandmarker.HAND_CONNECTIONS.map((c) => [c.start, c.end]);
 
 // Landmark indices (MediaPipe Pose).
 // Every one of the tracker's 33 points is drawn and recorded: face, shoulders, elbows, wrists, three points per hand,
@@ -46,7 +79,8 @@ function trackLoop() {
       try { res = landmarker.detectForVideo(videoEl, now); } catch (e) { /* a dropped frame */ }
       const lm = res && res.landmarks && res.landmarks[0];
       if (lm) {
-        latest = { t: now, lm, wl: res.worldLandmarks && res.worldLandmarks[0] };
+        trackHand(lm, now);
+        latest = { t: now, lm, wl: res.worldLandmarks && res.worldLandmarks[0], hL: hands.L, hR: hands.R };
         lastSeen = now;
         if (takeFrames) takeFrames.push(latest);
       } else latest = null;
@@ -74,6 +108,13 @@ function drawOverlay() {
   for (const [a, b] of BONES) { const [x1, y1] = P(a), [x2, y2] = P(b); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
   g.fillStyle = "#fff";
   for (let i = 0; i < latest.lm.length; i++) { const [x, y] = P(i); g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fill(); }
+  g.lineWidth = 2; g.strokeStyle = "rgba(80,200,255,.95)"; g.fillStyle = "rgba(80,200,255,.95)";
+  for (const hd of [latest.hL, latest.hR]) {
+    if (!hd) continue;
+    const Q = (i) => [ox + hd.lm[i].x * vw, oy + hd.lm[i].y * vh];
+    for (const [a, b] of HAND_BONES) { const [x1, y1] = Q(a), [x2, y2] = Q(b); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+    for (let i = 0; i < 21; i++) { const [x, y] = Q(i); g.beginPath(); g.arc(x, y, 2, 0, Math.PI * 2); g.fill(); }
+  }
 }
 
 // ------------------------------------------------------------------ voice
@@ -216,10 +257,12 @@ async function recordRep(item, rep, reps) {
 }
 
 // Landmarks rounded to keep the take list small: per frame, time (s), then 33 x [x, y, visibility] image landmarks and
-// 33 x [x, y, z] world landmarks (metres, hips at the origin).
+// 33 x [x, y, z] world landmarks (metres, hips at the origin), and per hand (hL, hR, or null when not found) 21 x [x, y, z]
+// image landmarks (full-frame normalised) and 21 x [x, y, z] world landmarks (metres, hand centre at the origin).
 function packFrames(frames) {
   const r = (v) => Math.round(v * 1000) / 1000;
-  return frames.map((f) => ({ t: recTime(f.t), lm: f.lm.map((p) => [r(p.x), r(p.y), r(p.visibility ?? 1)]), wl: f.wl ? f.wl.map((p) => [r(p.x), r(p.y), r(p.z)]) : null }));
+  const hand = (hd) => (hd ? { lm: hd.lm.map((p) => [r(p.x), r(p.y), r(p.z)]), wl: hd.wl ? hd.wl.map((p) => [r(p.x), r(p.y), r(p.z)]) : null } : null);
+  return frames.map((f) => ({ t: recTime(f.t), lm: f.lm.map((p) => [r(p.x), r(p.y), r(p.visibility ?? 1)]), wl: f.wl ? f.wl.map((p) => [r(p.x), r(p.y), r(p.z)]) : null, hL: hand(f.hL), hR: hand(f.hR) }));
 }
 
 function updateProgress() {
