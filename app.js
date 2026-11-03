@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.8";
+const VERSION = "1.9";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -239,7 +239,7 @@ async function waitUnpaused() { while (paused && !finishing) await sleep(200); }
 // Waits until the person is in frame and facing the right way, saying what to fix every few seconds. Pauses when
 // nobody has been seen for 4 s (the owner stepped away) and carries on when they come back.
 async function waitReady(item) {
-  let okSince = 0, lastHint = performance.now(), awaySaid = false;
+  let okSince = 0, lastHint = performance.now(), awaySaid = false, facingHints = 0;
   const aspect = videoEl.videoWidth / videoEl.videoHeight || 16 / 9;
   if (!settings.checks) { await waitUnpaused(); await sleep(1500); return !(finishing || skip || back); } // no tracker: just a breath between takes
   while (!finishing && !skip && !back) {
@@ -253,12 +253,14 @@ async function waitReady(item) {
     }
     if (awaySaid) { awaySaid = false; setStatus(""); await speak(`Welcome back. ${item.shot.name}, ${facingWords(item.facing)}.`); lastHint = performance.now(); }
     const f = latest && framing(latest.lm);
-    const faceOk = latest && (item.shot.kind === "fall" || item.shot.kind === "kneel" || item.shot.sideOnly || facingOk(latest.lm, aspect, item.facing));
-    if (f && f.ok && faceOk) { if (!okSince) okSince = now; if (now - okSince > 1200) return true; }
+    const faceOk = latest && (item.shot.kind === "fall" || item.shot.kind === "kneel" || item.shot.sideOnly || facingOk(latest.lm, aspect, item.facing, latest.wl));
+    if (f && f.ok && (faceOk || facingHints >= 2)) { if (!okSince) okSince = now; if (now - okSince > 1200) return true; }
     else {
       okSince = 0;
       if (now - lastHint > 7000) {
         lastHint = now;
+        const facingOnly = latest && f.ok && !faceOk;
+        if (facingOnly) facingHints++;
         const hint = !latest ? "Step into the frame." : f.missing.size ? `I can't see your ${[...f.missing][0]}.` : !f.centred ? "Move to the middle." : item.facing === "front" ? "Face the camera." : `Turn ${facingWords(item.facing)}.`;
         setStatus(hint, "bad"); await speak(hint); setStatus("");
       }
@@ -375,6 +377,7 @@ async function main() {
   let camOk = true;
   try {
     const test = new URLSearchParams(location.search).get("test"); // local testing only: a still image stands in for the camera
+    if (test) window.__coach = { latest: () => latest };
     if (test && /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) await startTestStream(test); else { await startCamera(); await fillCameras().catch(() => {}); }
   } catch (e) { camOk = false; $("frameCheck").textContent = "Camera blocked: allow camera access for this page (Safari: aA › Website Settings › Camera › Allow), then reload."; }
   trackLoop();

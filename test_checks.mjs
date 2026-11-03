@@ -58,5 +58,13 @@ v = judge(frames(150, () => pose({ sw: 0.01, near: "L" })), shot("still"), "side
 expect("wrong side fails with the side named", !v.good && /right side/.test(v.reason), v.reason);
 v = judge(frames(150, () => pose({ sw: 0.01, near: "R" })), shot("still"), "sideR", 150, ASPECT);
 expect("right side take passes", v.good, JSON.stringify(v));
+// World landmarks: shoulders 0.36 m apart across (front) or along the depth axis (side).
+const wlFront = Array.from({ length: 33 }, () => ({ x: 0, y: 0, z: 0 })); wlFront[11] = { x: -0.18, y: -0.45, z: 0.02 }; wlFront[12] = { x: 0.18, y: -0.45, z: -0.02 };
+const wlSide = Array.from({ length: 33 }, () => ({ x: 0, y: 0, z: 0 })); wlSide[11] = { x: -0.03, y: -0.45, z: -0.18 }; wlSide[12] = { x: 0.03, y: -0.45, z: 0.18 };
+const narrow = pose({ sw: 0.01 }); // looks side-on on screen (an upright phone or a rotated frame), but the 3D says front
+expect("3D front wins over a narrow 2D look", facingOk(narrow, ASPECT, "front", wlFront));
+expect("3D side is not front", !facingOk(narrow, ASPECT, "front", wlSide));
+v = judge(frames(150, () => pose({ sw: 0.01 })).map((f) => ({ ...f, wl: wlFront })), shot("still"), "front", 150, ASPECT);
+expect("front take passes on 3D facing", v.good, JSON.stringify(v));
 console.log(fails ? `${fails} FAILED` : "all passed");
 process.exit(fails ? 1 : 0);

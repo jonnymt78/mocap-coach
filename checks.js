@@ -19,15 +19,23 @@ export function torso(lm, aspect) {
   const s = mid(lm[LSH], lm[RSH]), h = mid(lm[LHIP], lm[RHIP]);
   return Math.hypot((s.x - h.x) * aspect, s.y - h.y) || 1e-3;
 }
-// Shoulder width over torso length: large facing the camera, small side-on.
-export function facingRatio(lm, aspect) { return Math.abs(lm[LSH].x - lm[RSH].x) * aspect / torso(lm, aspect); }
+// Shoulder width over torso length on screen: large facing the camera, small side-on. Used only without world landmarks.
+export function facingRatio(lm, aspect) { return Math.hypot((lm[LSH].x - lm[RSH].x) * aspect, lm[LSH].y - lm[RSH].y) / torso(lm, aspect); }
+// How square the shoulders are to the camera, from the tracker's 3D world landmarks: 1 facing it, 0 side-on. Uses depth,
+// so it holds with the phone upright or sideways and on any lens.
+export function frontness(wl) {
+  const x = wl[RSH].x - wl[LSH].x, y = wl[RSH].y - wl[LSH].y, z = wl[RSH].z - wl[LSH].z;
+  return Math.hypot(x, y) / (Math.hypot(x, y, z) || 1e-6);
+}
 // Which side is nearer the camera when side-on: the tracker's depth (z, smaller = nearer) of the two shoulders and hips.
 export function nearSide(lm) { return lm[LSH].z + lm[LHIP].z < lm[RSH].z + lm[RHIP].z ? "L" : "R"; }
 // facing: "front", "sideL" (left side to the camera) or "sideR"; plain "side" accepts either side.
-export function facingOk(lm, aspect, facing) {
-  const r = facingRatio(lm, aspect);
-  if (facing === "front") return r > 0.45;
-  if (r >= 0.42) return false;
+// wl: the frame's world landmarks when the tracker gave them (it always does on the phone).
+export function facingOk(lm, aspect, facing, wl) {
+  const front = wl ? frontness(wl) > 0.55 : facingRatio(lm, aspect) > 0.4;
+  if (facing === "front") return front;
+  const side = wl ? frontness(wl) < 0.7 : facingRatio(lm, aspect) < 0.42;
+  if (!side) return false;
   return facing === "side" || nearSide(lm) === (facing === "sideR" ? "R" : "L");
 }
 export function median(a) { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; }
@@ -48,11 +56,12 @@ export function judge(frames, shot, facing, tries, aspect) {
   if (metrics.offCentre > 0.3) return { good: false, reason: "Move back to the middle of the frame.", metrics };
   // Facing (skip for falls and kneels, which turn the body)
   if (shot.kind !== "fall" && shot.kind !== "kneel") {
-    const r = median(frames.map((f) => facingRatio(f.lm, aspect)));
-    metrics.facing = r;
-    if (facing === "front" && r < 0.4) return { good: false, reason: "Face the camera for this one.", metrics };
+    // The share of frames facing the asked way: lenient, since a move can turn the body for a moment.
+    const square = frames.filter((f) => facingOk(f.lm, aspect, "front", f.wl)).length / frames.length;
+    metrics.facingFront = square;
+    if (facing === "front" && square < 0.4) return { good: false, reason: "Face the camera for this one.", metrics };
     const wantSide = facing === "sideR" ? "R" : facing === "sideL" ? "L" : null;
-    if (facing !== "front" && r > 0.5) return { good: false, reason: `Turn side-on, ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
+    if (facing !== "front" && square > 0.7) return { good: false, reason: `Turn side-on, ${wantSide === "R" ? "right" : "left"} side to the camera.`, metrics };
     if (wantSide) {
       const near = frames.filter((f) => nearSide(f.lm) === wantSide).length / frames.length;
       metrics.nearSide = near;
