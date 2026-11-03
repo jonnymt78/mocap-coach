@@ -3,12 +3,12 @@
 // take is checked, and the session saves as one video plus a take list (start/end of every take, verdict, and the tracked
 // body and hand landmarks) for cutting on the PC.
 import { PoseLandmarker, HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
-import { SESSIONS, SHOTS, KEY_SIDE } from "./shots.js?v=2.2";
-import { framing, facingOk, judge } from "./checks.js?v=2.2";
+import { SESSIONS, SHOTS, KEY_SIDE } from "./shots.js?v=2.3";
+import { framing, facingOk, judge } from "./checks.js?v=2.3";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "2.2";
+const VERSION = "2.3";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";

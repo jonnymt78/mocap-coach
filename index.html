@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Mocap Coach</title>
-<link rel="stylesheet" href="style.css?v=2.2">
+<link rel="stylesheet" href="style.css?v=2.3">
 </head>
 <body>
 <main id="setup" class="screen">
@@ -45,10 +45,8 @@
 </main>
 
 <main id="run" class="screen hidden">
-  <video id="live" playsinline muted></video>
-  <canvas id="liveOverlay"></canvas>
   <div id="banner"><div id="takeLabel"></div><div id="takeSay"></div></div>
-  <div id="status"></div>
+  <div id="stage"><video id="live" playsinline muted></video><canvas id="liveOverlay"></canvas><div id="status"></div></div>
   <div id="controls">
     <span id="progress"></span>
     <button id="backBtn">Back</button>
@@ -68,6 +66,6 @@
   <button id="againBtn">Start another session</button>
 </main>
 
-<script type="module" src="app.js?v=2.2"></script>
+<script type="module" src="app.js?v=2.3"></script>
 </body>
 </html>
