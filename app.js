@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.3";
+const VERSION = "1.4";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -212,6 +212,8 @@ async function waitReady(item) {
     await waitUnpaused();
     const now = performance.now();
     if (now - lastSeen > 4000) {
+      // Before the first take the owner is still walking from the phone to their spot: no "paused", just a gentle reminder.
+      if (!log.length) { if (now - lastHint > 15000) { lastHint = now; await speak("Ready when you are. I'll start as soon as I can see all of you."); } okSince = 0; await sleep(250); continue; }
       if (!awaySaid) { setStatus("Paused"); await speak("Paused. Step back into the frame to carry on."); awaySaid = true; }
       okSince = 0; await sleep(250); continue;
     }
@@ -278,7 +280,9 @@ function updateProgress() {
 
 async function runSession() {
   running = true;
-  await speak(`Starting. ${plan.length} takes. Step out of the frame any time to pause.`);
+  setStatus("Walk to your spot");
+  await speak(`Walk to your spot. I'll begin as soon as I can see all of you. ${plan.length} takes. Step out of the frame any time to pause.`);
+  setStatus("");
   while (idx < plan.length && !finishing) {
     updateProgress();
     const item = plan[idx], reps = item.shot.reps || 1;
