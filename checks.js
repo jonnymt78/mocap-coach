@@ -6,7 +6,9 @@ export function framing(lm) {
   const missing = new Set();
   for (const [i, part] of KEY) {
     const p = lm[i];
-    if ((p.visibility ?? 1) < 0.5 || p.x < MARGIN || p.x > 1 - MARGIN || p.y < MARGIN || p.y > 1 - MARGIN) missing.add(part);
+    // Feet: bare feet on a pale floor read faintly, so a lower visibility bar; the heel or toe on the floor counts too.
+    const vis = part === "feet" ? Math.max(p.visibility ?? 1, lm[i + 2].visibility ?? 0, lm[i + 4].visibility ?? 0) : (p.visibility ?? 1);
+    if (vis < (part === "feet" ? 0.3 : 0.5) || p.x < MARGIN || p.x > 1 - MARGIN || p.y < MARGIN || p.y > 1 - MARGIN) missing.add(part);
   }
   const hipX = (lm[LHIP].x + lm[RHIP].x) / 2;
   const centred = hipX > 0.22 && hipX < 0.78;

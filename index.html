@@ -10,10 +10,13 @@
 <body>
 <main id="setup" class="screen">
   <h1>Mocap Coach</h1>
-  <p class="lede">Prop the phone up in landscape, back camera facing you, about hip height and 3–4 m away. Everything stays on this phone: nothing is uploaded.</p>
+  <p class="lede">Prop the phone up, back camera facing you, about hip height and as far back as the room allows. Sideways or upright both work: upright fits a tall body into a small room more easily. Everything stays on this phone: nothing is uploaded.</p>
 
   <div class="preview-wrap"><video id="preview" playsinline muted></video><canvas id="previewOverlay"></canvas><div id="frameCheck" class="badge">Starting camera…</div></div>
 
+  <label>Camera (pick "Back Ultra Wide Camera" if it can't fit all of you)
+    <select id="cameraPick"></select>
+  </label>
   <label>Session
     <select id="sessionPick"></select>
   </label>

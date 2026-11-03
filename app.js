@@ -8,7 +8,7 @@ import { framing, facingOk, judge } from "./checks.js";
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const VERSION = "1.5";
+const VERSION = "1.6";
 
 // ------------------------------------------------------------------ body tracking
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
@@ -155,9 +155,26 @@ function idbClear() { return new Promise((res) => { const tx = db.transaction(["
 
 // ------------------------------------------------------------------ camera and recorder
 let stream = null, recorder = null, recStart = 0, mime = "";
-async function startCamera() {
-  stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } });
+// The camera: the back camera by default; once the page may use the camera, the picker lists every one (an iPhone's
+// "Back Ultra Wide Camera" is its 0.5x lens, which fits a whole body in a small room). The choice is remembered.
+async function startCamera(deviceId) {
+  if (stream) for (const t of stream.getTracks()) t.stop();
+  const base = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+  stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { ...base, deviceId: { exact: deviceId } } : { ...base, facingMode: { ideal: "environment" } } });
   for (const v of [$("preview"), $("live")]) { v.srcObject = stream; v.play().catch(() => {}); }
+}
+async function fillCameras() {
+  const pick = $("cameraPick"), cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  const current = stream && stream.getVideoTracks()[0] && stream.getVideoTracks()[0].getSettings().deviceId;
+  pick.innerHTML = "";
+  cams.forEach((c, i) => pick.add(new Option(c.label || `Camera ${i + 1}`, c.deviceId)));
+  if (current) pick.value = current;
+  pick.onchange = async () => { try { await startCamera(pick.value); localStorage.setItem("mocap-camera", pick.value); } catch (e) { $("frameCheck").textContent = "That camera would not start."; } };
+  // First visit: prefer the ultra-wide back lens when the phone has one.
+  let saved = null; try { saved = localStorage.getItem("mocap-camera"); } catch (e) { /* private mode */ }
+  const wide = cams.find((c) => /ultra ?wide/i.test(c.label));
+  const want = saved && cams.some((c) => c.deviceId === saved) ? saved : wide ? wide.deviceId : null;
+  if (want && want !== current) { pick.value = want; await pick.onchange(); }
 }
 // Local testing only: a still image, drawn into a canvas, stands in for the camera.
 async function startTestStream(src) {
@@ -339,7 +356,7 @@ async function main() {
   let camOk = true;
   try {
     const test = new URLSearchParams(location.search).get("test"); // local testing only: a still image stands in for the camera
-    if (test && /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) await startTestStream(test); else await startCamera();
+    if (test && /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) await startTestStream(test); else { await startCamera(); await fillCameras().catch(() => {}); }
   } catch (e) { camOk = false; $("frameCheck").textContent = "Camera blocked: allow camera access for this page (Safari: aA › Website Settings › Camera › Allow), then reload."; }
   trackLoop();
   setInterval(() => {
